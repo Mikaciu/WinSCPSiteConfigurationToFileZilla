@@ -32,7 +32,6 @@
 				} else{
 					// this is a <Folder>, create the <Folder> element, and parse the substructure
 					$oCurrentFolder = $oRootElement->createElement('Folder', $sFolderName);
-					if(is_array($oCurrentFolder)){var_dump($oCurrentFolder);}
 					$oParentElement->appendChild($oCurrentFolder);
 					processStructure($aSubStructure, $oRootElement, $oCurrentFolder);
 				}
