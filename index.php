@@ -16,6 +16,8 @@
 		die;
 	}
 	
+	$bErrorHasHappened = false;
+	
 	function processStructure($aStructureToParse, $oRootElement, $oParentElement){
 		if(is_array($aStructureToParse)){
 			foreach ($aStructureToParse as $sFolderName => $aSubStructure){
@@ -23,10 +25,14 @@
 				if(preg_match('/^s\|/', $sFolderName) == 1){
 					// this is a <Site>, only append it to the parent <Folder>
 					$sSiteName = preg_replace('/^s\|/', '', $sFolderName);
-					$oParentElement->appendChild($aSubStructure);
+					if(gettype($aSubStructure) == 'object'){
+						// This is a DOMElement, and not an array
+						$oParentElement->appendChild($aSubStructure);
+					}
 				} else{
 					// this is a <Folder>, create the <Folder> element, and parse the substructure
 					$oCurrentFolder = $oRootElement->createElement('Folder', $sFolderName);
+					if(is_array($oCurrentFolder)){var_dump($oCurrentFolder);}
 					$oParentElement->appendChild($oCurrentFolder);
 					processStructure($aSubStructure, $oRootElement, $oCurrentFolder);
 				}
@@ -42,8 +48,26 @@
 		while (($line = fgets($handle)) !== false) {
 			if (preg_match('/^\[/', $line)){
 				// new section ; by default do not keep the following lines except it is session data
-				if(preg_match('/^\[Sessions\\\\/', $line)){
+				if(preg_match('/^\[Sessions\\\\(.*)\\](\\s*)$/', $line, $aMatches)){
 					$bKeepSection = true;
+					// As mentioned in http://php.net/manual/en/function.parse-ini-string.php, 
+					// some exotic characters in the section name can lead to errors 
+					// while reading the file. Uncomment array keys if you have read errors.
+					$aRemoveForbiddenSectionChars = Array(
+						'?' => '',
+						// '{' => '',
+						// '}' => '',
+						'|' => '',
+						'&' => '',
+						'~' => '',
+						'!' => '',
+						'[' => '',
+						// '(' => '',
+						// ')' => '',
+						'^' => '',
+						']' => '',
+					);
+					$line = '[Sessions\\' . strtr($aMatches[1], $aRemoveForbiddenSectionChars) . ']' . $aMatches[2];
 					$sINIFile .= $line;
 				}else{
 					$bKeepSection = false;
@@ -60,6 +84,7 @@
 	}
 	
 	$aINIFile = parse_ini_string($sINIFile, true, INI_SCANNER_RAW);
+	
 	$aDirectoryStructure = array();
 
 	$oDoc = new DomDocument("1.0", "UTF-8");
@@ -71,114 +96,129 @@
     $oDoc->formatOutput = true;
     $oDoc->standalone = true;
 	
-	ksort($aINIFile);
-	foreach ($aINIFile as $sSessionName => $aSessionConf){
-		// 1 create structure from the session name
-		$sSessionName = str_replace('Sessions\\','', $sSessionName);
-		$aFoldersStructure = explode('/', $sSessionName);
-		$aFoldersToCreate = array_splice($aFoldersStructure, 0, count($aFoldersStructure)-1);
-		$sSessionLabel = urldecode($aFoldersStructure[count($aFoldersStructure) -1 ]);
-		
-		// 2 export conf, in the right structure
-		$oServer = $oDoc->createElement('Server', $sSessionLabel);
-		$oNodeToAdd = $oDoc->createElement('Host', $aSessionConf['HostName']);
-		$oServer->appendChild($oNodeToAdd);
-		
-		$oNodeToAdd = $oDoc->createElement('Protocol', 1);
-		$oServer->appendChild($oNodeToAdd);
-		
-		if(array_key_exists('UserName', $aSessionConf)){
-			$sUserName = $aSessionConf['UserName'];
-		}else{
-			$sUserName = '';
-		}
-		if(array_key_exists('Password', $aSessionConf)){
-			$sCurrentPassword = $aSessionConf['Password'];
-		}else{
-			$sCurrentPassword = '';
-		}
-		$oNodeToAdd = $oDoc->createElement('User', $sUserName);
-		$oServer->appendChild($oNodeToAdd);
-		
-		$sPassword = base64_encode(exec('/usr/bin/java -jar ' .  __DIR__ . '/WinSCPPasswordDecrypt.jar "' . $aSessionConf['HostName'] . '" "' . $sUserName . '" "' . $sCurrentPassword . '"'));
-		$oPass = $oDoc->createElement('Pass', $sPassword);
-		$oPassEncoding = $oDoc->createAttribute('encoding');
-		$oPassEncoding->value = 'base64';
-		$oPass->appendChild($oPassEncoding);
-		$oServer->appendChild($oPass);
-		
-		if(array_key_exists('LocalDirectory', $aSessionConf)){
-			$oNodeToAdd = $oDoc->createElement('LocalDir', urldecode($aSessionConf['LocalDirectory']));
-		}else{
-			$oNodeToAdd = $oDoc->createElement('LocalDir', '');
-		}
-		$oServer->appendChild($oNodeToAdd);
+	if(!is_array($aINIFile) || empty($aINIFile)){
+		$bErrorHasHappened = true;
+		$sErrorToDisplay = "The attempt to read the .ini file failed.";
+	}else{
+		ksort($aINIFile);
+		foreach ($aINIFile as $sSessionName => $aSessionConf){
+			// 1 create structure from the session name
+			$sSessionName = str_replace('Sessions\\','', $sSessionName);
+			$aFoldersStructure = explode('/', $sSessionName);
+			$aFoldersToCreate = array_splice($aFoldersStructure, 0, count($aFoldersStructure)-1);
+			$sSessionLabel = urldecode($aFoldersStructure[count($aFoldersStructure) -1 ]);
+			
+			// 2 export conf, in the right structure
+			$oServer = $oDoc->createElement('Server', $sSessionLabel);
+			$oNodeToAdd = $oDoc->createElement('Host', $aSessionConf['HostName']);
+			$oServer->appendChild($oNodeToAdd);
+			
+			// Protocol 0 = FTP
+			// Protocol 1 = SFTP
+			$sProtocol = 1;	// by default, if the protocol is not set in WinSCP, it is SFTP
+			if (isset($aSessionConf['FSProtocol']) && $aSessionConf['FSProtocol'] == 5){
+				$sProtocol = "0";
+			}
+			$oNodeToAdd = $oDoc->createElement('Protocol', $sProtocol);
+			$oServer->appendChild($oNodeToAdd);
+			
+			if(array_key_exists('UserName', $aSessionConf)){
+				$sUserName = $aSessionConf['UserName'];
+			}else{
+				$sUserName = '';
+			}
+			if(array_key_exists('Password', $aSessionConf)){
+				$sCurrentPassword = $aSessionConf['Password'];
+			}else{
+				$sCurrentPassword = '';
+			}
+			$oNodeToAdd = $oDoc->createElement('User', $sUserName);
+			$oServer->appendChild($oNodeToAdd);
+			
+			$sPassword = base64_encode(exec('/usr/bin/java -jar ' .  __DIR__ . '/WinSCPPasswordDecrypt.jar "' . $aSessionConf['HostName'] . '" "' . $sUserName . '" "' . $sCurrentPassword . '"'));
+			$oPass = $oDoc->createElement('Pass', $sPassword);
+			$oPassEncoding = $oDoc->createAttribute('encoding');
+			$oPassEncoding->value = 'base64';
+			$oPass->appendChild($oPassEncoding);
+			$oServer->appendChild($oPass);
+			
+			if(array_key_exists('LocalDirectory', $aSessionConf)){
+				$oNodeToAdd = $oDoc->createElement('LocalDir', urldecode($aSessionConf['LocalDirectory']));
+			}else{
+				$oNodeToAdd = $oDoc->createElement('LocalDir', '');
+			}
+			$oServer->appendChild($oNodeToAdd);
 
-		if(array_key_exists('RemoteDirectory', $aSessionConf)){
-			$aRemoteDir = explode('/',urldecode($aSessionConf['RemoteDirectory']));
-			$sProcessedRemoteDir = '1';
-			foreach ($aRemoteDir as $sDirectory){
-				$sProcessedRemoteDir .= ' ' . strlen($sDirectory);
-				if($sDirectory != ''){
-					$sProcessedRemoteDir .= ' ' . $sDirectory;
+			if(array_key_exists('RemoteDirectory', $aSessionConf)){
+				$aRemoteDir = explode('/',urldecode($aSessionConf['RemoteDirectory']));
+				$sProcessedRemoteDir = '1';
+				foreach ($aRemoteDir as $sDirectory){
+					$sProcessedRemoteDir .= ' ' . strlen($sDirectory);
+					if($sDirectory != ''){
+						$sProcessedRemoteDir .= ' ' . $sDirectory;
+					}
+				}
+			}else{
+				$sProcessedRemoteDir = '';
+			}
+			$oNodeToAdd = $oDoc->createElement('RemoteDir', $sProcessedRemoteDir);
+			$oServer->appendChild($oNodeToAdd);
+			$oNodeToAdd = $oDoc->createElement('Port', isset($aSessionConf['PortNumber']) ? $aSessionConf['PortNumber'] : 22);
+			$oServer->appendChild($oNodeToAdd);
+			$oNodeToAdd = $oDoc->createElement('Type', 0);
+			$oServer->appendChild($oNodeToAdd);
+			$oNodeToAdd = $oDoc->createElement('Logontype', 1);
+			$oServer->appendChild($oNodeToAdd);
+			$oNodeToAdd = $oDoc->createElement('TimezoneOffset', 0);
+			$oServer->appendChild($oNodeToAdd);
+			$oNodeToAdd = $oDoc->createElement('PasvMode', 'MODE_DEFAULT');
+			$oServer->appendChild($oNodeToAdd);
+			$oNodeToAdd = $oDoc->createElement('MaximumMultipleConnections', 0);
+			$oServer->appendChild($oNodeToAdd);
+			$oNodeToAdd = $oDoc->createElement('EncodingType', 'Auto');
+			$oServer->appendChild($oNodeToAdd);
+			$oNodeToAdd = $oDoc->createElement('BypassProxy', 0);
+			$oServer->appendChild($oNodeToAdd);
+			$oNodeToAdd = $oDoc->createElement('SyncBrowsing', 0);
+			$oServer->appendChild($oNodeToAdd);
+			$oNodeToAdd = $oDoc->createElement('Comments');
+			$oServer->appendChild($oNodeToAdd);
+			$oNodeToAdd = $oDoc->createElement('Name', $sSessionLabel);
+			$oServer->appendChild($oNodeToAdd);
+			
+			// 3 from the last directory in the structure, "stack" directories on onto another
+			$aTempStructure = Array();
+			for($iCptElements = count($aFoldersToCreate) - 1; $iCptElements >= 0; $iCptElements --){
+				if($iCptElements == count($aFoldersToCreate) - 1){
+					$aTempStructure = Array (
+						$aFoldersToCreate[$iCptElements] => Array(
+							 's|' . $sSessionLabel => $oServer
+						)
+					);
+				}else{
+					$aTempStructure = Array ($aFoldersToCreate[$iCptElements] => $aTempStructure);
 				}
 			}
-		}else{
-			$sProcessedRemoteDir = '';
-		}
-		$oNodeToAdd = $oDoc->createElement('RemoteDir', $sProcessedRemoteDir);
-		$oServer->appendChild($oNodeToAdd);
-		$oNodeToAdd = $oDoc->createElement('Port', isset($aSessionConf['PortNumber']) ? $aSessionConf['PortNumber'] : 22);
-		$oServer->appendChild($oNodeToAdd);
-		$oNodeToAdd = $oDoc->createElement('Type', 0);
-		$oServer->appendChild($oNodeToAdd);
-		$oNodeToAdd = $oDoc->createElement('Logontype', 1);
-		$oServer->appendChild($oNodeToAdd);
-		$oNodeToAdd = $oDoc->createElement('TimezoneOffset', 0);
-		$oServer->appendChild($oNodeToAdd);
-		$oNodeToAdd = $oDoc->createElement('PasvMode', 'MODE_DEFAULT');
-		$oServer->appendChild($oNodeToAdd);
-		$oNodeToAdd = $oDoc->createElement('MaximumMultipleConnections', 0);
-		$oServer->appendChild($oNodeToAdd);
-		$oNodeToAdd = $oDoc->createElement('EncodingType', 'Auto');
-		$oServer->appendChild($oNodeToAdd);
-		$oNodeToAdd = $oDoc->createElement('BypassProxy', 0);
-		$oServer->appendChild($oNodeToAdd);
-		$oNodeToAdd = $oDoc->createElement('SyncBrowsing', 0);
-		$oServer->appendChild($oNodeToAdd);
-		$oNodeToAdd = $oDoc->createElement('Comments');
-		$oServer->appendChild($oNodeToAdd);
-		$oNodeToAdd = $oDoc->createElement('Name', $sSessionLabel);
-		$oServer->appendChild($oNodeToAdd);
-		
-		// 3 from the last directory in the structure, "stack" directories on onto another
-		$aTempStructure = Array();
-		for($iCptElements = count($aFoldersToCreate) - 1; $iCptElements >= 0; $iCptElements --){
-			if($iCptElements == count($aFoldersToCreate) - 1){
-				$aTempStructure = Array (
-					$aFoldersToCreate[$iCptElements] => Array(
-						 's|' . $sSessionLabel => $oServer
-					)
-				);
-			}else{
-				$aTempStructure = Array ($aFoldersToCreate[$iCptElements] => $aTempStructure);
-			}
-		}
 
-		// add the directory structure to the global directory structure
-		$aDirectoryStructure = array_merge_recursive($aDirectoryStructure, $aTempStructure);
+			// add the directory structure to the global directory structure
+			$aDirectoryStructure = array_merge_recursive($aDirectoryStructure, $aTempStructure);
+		}
+		
+		// 4 within $aDirectoryStructure, there is the folder structure, along with the XML nodes.
+		// Now, remains to create <folder> nodes for each level of the array, then add the DOM element present in it.
+		processStructure($aDirectoryStructure, $oDoc, $oServers);
 	}
 	
-	// 4 within $aDirectoryStructure, there is the folder structure, along with the XML nodes.
-	// Now, remains to create <folder> nodes for each level of the array, then add the DOM element present in it.
-	processStructure($aDirectoryStructure, $oDoc, $oServers);
-	
-	header("Cache-Control: public");
-	header("Content-Description: File Transfer");
-	header("Content-Disposition: attachment; filename=sitemanager.xml");
-	header("Content-Type: application/octet-stream; "); 
-	header("Content-Transfer-Encoding: binary");
-	echo $oDoc->saveXML();
+	if (!$bErrorHasHappened){
+		header("Cache-Control: public");
+		header("Content-Description: File Transfer");
+		header("Content-Disposition: attachment; filename=sitemanager.xml");
+		header("Content-Type: application/octet-stream; "); 
+		header("Content-Transfer-Encoding: binary");
+		echo $oDoc->saveXML();
+	}else{
+		echo '<span style="color:red;">' . $sErrorToDisplay . '</span>';
+	}
 	
 	unlink($_FILES['userfile']['tmp_name']);
 ?>
