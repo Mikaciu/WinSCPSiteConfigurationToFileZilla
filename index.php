@@ -108,9 +108,15 @@
 			$aFoldersToCreate = array_splice($aFoldersStructure, 0, count($aFoldersStructure)-1);
 			$sSessionLabel = urldecode($aFoldersStructure[count($aFoldersStructure) -1 ]);
 			
+			// If the HostName value is not found, do not add the site.
+			if(!isset( $aSessionConf['HostName'])){
+				continue;
+			}
+			$sHostName = $aSessionConf['HostName'];
+			
 			// 2 export conf, in the right structure
 			$oServer = $oDoc->createElement('Server', $sSessionLabel);
-			$oNodeToAdd = $oDoc->createElement('Host', $aSessionConf['HostName']);
+			$oNodeToAdd = $oDoc->createElement('Host', $sHostName);
 			$oServer->appendChild($oNodeToAdd);
 			
 			// Protocol 0 = FTP
@@ -135,7 +141,7 @@
 			$oNodeToAdd = $oDoc->createElement('User', $sUserName);
 			$oServer->appendChild($oNodeToAdd);
 			
-			$sPassword = base64_encode(exec('/usr/bin/java -jar ' .  __DIR__ . '/WinSCPPasswordDecrypt.jar "' . $aSessionConf['HostName'] . '" "' . $sUserName . '" "' . $sCurrentPassword . '"'));
+			$sPassword = base64_encode(exec('/usr/bin/java -jar ' .  __DIR__ . '/WinSCPPasswordDecrypt.jar "' . $sHostName . '" "' . $sUserName . '" "' . $sCurrentPassword . '"'));
 			$oPass = $oDoc->createElement('Pass', $sPassword);
 			$oPassEncoding = $oDoc->createAttribute('encoding');
 			$oPassEncoding->value = 'base64';
