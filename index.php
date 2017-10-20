@@ -193,17 +193,22 @@
 			
 			// 3 from the last directory in the structure, "stack" directories on onto another
 			$aTempStructure = Array();
-			for($iCptElements = count($aFoldersToCreate) - 1; $iCptElements >= 0; $iCptElements --){
-				if($iCptElements == count($aFoldersToCreate) - 1){
-					$aTempStructure = Array (
-						$aFoldersToCreate[$iCptElements] => Array(
-							 's|' . $sSessionLabel => $oServer
-						)
-					);
-				}else{
-					$aTempStructure = Array ($aFoldersToCreate[$iCptElements] => $aTempStructure);
-				}
-			}
+            if (count($aFoldersToCreate) > 1){
+                for($iCptElements = count($aFoldersToCreate) - 1; $iCptElements >= 0; $iCptElements --){
+                    if($iCptElements == count($aFoldersToCreate) - 1){
+                        $aTempStructure = Array (
+                            $aFoldersToCreate[$iCptElements] => Array(
+                                 's|' . $sSessionLabel => $oServer
+                            )
+                        );
+                    }else{
+                        $aTempStructure = Array ($aFoldersToCreate[$iCptElements] => $aTempStructure);
+                    }
+                }
+            }else{
+                // handle the sites not stored into a "folder"
+                $aTempStructure = Array('s|' . $sSessionLabel => $oServer);
+            }
 
 			// add the directory structure to the global directory structure
 			$aDirectoryStructure = array_merge_recursive($aDirectoryStructure, $aTempStructure);
