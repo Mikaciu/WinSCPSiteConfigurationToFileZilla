@@ -5,7 +5,7 @@
 <head><title>WinSCP configuration file converter</title></head>
 	<body>
 		<h1>Convert your WinSCP site manager data to Filezilla format</h1>
-		<form enctype="multipart/form-data" action="<?=$_SERVER['SCRIPT_NAME']?>" method="post">
+		<form enctype="multipart/form-data" action="<?php echo $_SERVER['SCRIPT_NAME']?>" method="post">
 			<input type="hidden" name="MAX_FILE_SIZE" value="1048576" />
 			<label for="userfile">INI file : </label><input name="userfile" type="file" id="userfile" />
 			<input type="submit" />
@@ -212,11 +212,14 @@
 
 			// add the directory structure to the global directory structure
 			$aDirectoryStructure = array_merge_recursive($aDirectoryStructure, $aTempStructure);
+		 	$oDoc->appendChild($oServer);
+
 		}
 		
 		// 4 within $aDirectoryStructure, there is the folder structure, along with the XML nodes.
 		// Now, remains to create <folder> nodes for each level of the array, then add the DOM element present in it.
 		processStructure($aDirectoryStructure, $oDoc, $oServers);
+
 	}
 	
 	if (!$bErrorHasHappened){
