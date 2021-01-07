@@ -126,7 +126,7 @@ if (!is_array($aINIFile) || empty($aINIFile)) {
         $sHostName = $aSessionConf['HostName'];
         
         // 2 export conf, in the right structure
-        $oServer    = $oDoc->createElement('Server', $sSessionLabel);
+        $oServer    = $oDoc->createElement('Server');
         $oNodeToAdd = $oDoc->createElement('Host', $sHostName);
         $oServer->appendChild($oNodeToAdd);
         
