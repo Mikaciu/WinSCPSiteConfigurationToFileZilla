@@ -208,16 +208,20 @@ if (!is_array($aINIFile) || empty($aINIFile)) {
         
         // 3 from the last directory in the structure, "stack" directories on onto another
         $aTempStructure = array();
-        if (count($aFoldersToCreate) > 1) {
-            for ($iCptElements = count($aFoldersToCreate) - 1; $iCptElements >= 0; $iCptElements--) {
-                if ($iCptElements === count($aFoldersToCreate) - 1) {
+        
+        if (count($aFoldersToCreate) > 0) {
+            $aFoldersToCreateCount = count($aFoldersToCreate) - 1;
+            for ($iCptElements = $aFoldersToCreateCount; $iCptElements >= 0; $iCptElements--) {
+                $sFolderName = urldecode($aFoldersToCreate[$iCptElements]);
+                
+                if ($iCptElements === $aFoldersToCreateCount) {
                     $aTempStructure = array(
-                        $aFoldersToCreate[$iCptElements] => array(
+                        $sFolderName => array(
                             's|' . $sSessionLabel => $oServer
                         )
                     );
                 } else {
-                    $aTempStructure = array($aFoldersToCreate[$iCptElements] => $aTempStructure);
+                    $aTempStructure = array($sFolderName => $aTempStructure);
                 }
             }
         } else {
