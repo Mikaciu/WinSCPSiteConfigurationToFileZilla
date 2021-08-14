@@ -160,11 +160,18 @@ if (!is_array($aINIFile) || empty($aINIFile)) {
         $oPassEncoding->value = 'base64';
         $oPass->appendChild($oPassEncoding);
         $oServer->appendChild($oPass);
+        $logOnType = 1;
         
         if (array_key_exists('LocalDirectory', $aSessionConf)) {
             $oNodeToAdd = $oDoc->createElement('LocalDir', urldecode($aSessionConf['LocalDirectory']));
         } else {
             $oNodeToAdd = $oDoc->createElement('LocalDir', '');
+        }
+        if (array_key_exists('PublicKeyFile', $aSessionConf)) {
+            $oNodeToAdd = $oDoc->createElement('Keyfile', urldecode($aSessionConf['PublicKeyFile']));
+            $logOnType = 5;
+        } else {
+            $oNodeToAdd = $oDoc->createElement('Keyfile', '');
         }
         $oServer->appendChild($oNodeToAdd);
         
@@ -187,7 +194,7 @@ if (!is_array($aINIFile) || empty($aINIFile)) {
         $oServer->appendChild($oNodeToAdd);
         $oNodeToAdd = $oDoc->createElement('Type', 0);
         $oServer->appendChild($oNodeToAdd);
-        $oNodeToAdd = $oDoc->createElement('Logontype', 1);
+        $oNodeToAdd = $oDoc->createElement('Logontype', $logOnType);
         $oServer->appendChild($oNodeToAdd);
         $oNodeToAdd = $oDoc->createElement('TimezoneOffset', 0);
         $oServer->appendChild($oNodeToAdd);
