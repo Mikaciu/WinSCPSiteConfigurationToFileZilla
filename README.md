@@ -15,4 +15,4 @@ installed. Just follow the instructions the page tell you.
 
 Alternatively you can use this script with php from command line.
 Example:\
-`php index.php filename=PATH_TO_YOUR_FILE\WinSCP.ini > OUTPUT_FILE.xml`
+`php index.php fileName=PATH_TO_YOUR_FILE\WinSCP.ini > OUTPUT_FILE.xml`
